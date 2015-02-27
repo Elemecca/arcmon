@@ -1,0 +1,18 @@
+Source: arcmon
+Section: multiverse/utils
+Priority: optional
+Maintainer: Sam Hanes <sam@maltera.com>
+Build-Depends: debhelper (>= 8.0.0), cmake
+Standards-Version: 3.9.5
+Homepage: https://github.com/Elemecca/arcmon
+Vcs-Git: git://github.com/Elemecca/arcmon.git
+Vcs-Browser: https://github.com/Elemecca/arcmon
+
+Package: arcmon
+Architecture: any
+Depends: libarclib (>= 342), ${shlibs:Depends}, ${misc:Depends}
+Description: monitoring daemon for Areca RAID hardware
+ ArcMon is a daemon which connects to the management interface of various
+ Areca RAID hardware and provides hardware and RAID system monitoring
+ information to client applications. The daemon itself has a tiny security
+ footprint and clients can't access the hardware interface at all.

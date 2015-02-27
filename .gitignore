@@ -1,1 +1,9 @@
+# normal build directory
 /build/
+
+# debian build output
+/debian/arcmon/
+/debian/*.log
+/debian/*.substvars
+/debian/files
+/obj-*/
