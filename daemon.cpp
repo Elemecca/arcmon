@@ -1,8 +1,8 @@
 
 #include <cstdio>
 
-#include "arclib.h"
-#include "linux_pass_ioctl.h"
+#include <arclib/arclib.h>
+#include <arclib/linux_pass_ioctl.h>
 
 using namespace std;
 
