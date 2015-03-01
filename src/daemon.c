@@ -10,9 +10,10 @@
 void errlog (const char *format, ...) {
     va_list args;
     va_start( args, format );
-    vprintf( format, args );
-    puts( "" );
+    vfprintf( stderr, format, args );
     va_end( args );
+
+    fprintf( stderr, "\n" );
 }
 
 
@@ -23,14 +24,18 @@ int main (int argc, char *argv[]) {
 
     setvbuf( stdout, NULL, _IOLBF, 0 );
 
-    errlog( "opening device /dev/sg2" );
     card = card_open( 2 );
     if (!card) return 2;
 
-    written = card_status( card, message, MESSAGE_MAX );
+    written = card_meta( card, message, MESSAGE_MAX );
     if (written < 0) return 3;
+    printf( "%s", message );
 
-    puts( message );
+    while (1) {
+        written = card_status( card, message, MESSAGE_MAX );
+        if (written < 0) return 3;
+        printf( "%s", message );
 
-    card_free( card );
+        sleep( 5 );
+    }
 }
