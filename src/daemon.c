@@ -4,6 +4,7 @@
 #include "common.h"
 #include "card.h"
 
+#define CARDS_MAX 16
 #define MESSAGE_MAX 4096
 
 
@@ -18,23 +19,31 @@ void errlog (const char *format, ...) {
 
 
 int main (int argc, char *argv[]) {
-    card_t card;
+    card_t cards[CARDS_MAX + 1];
     char message[MESSAGE_MAX];
-    int written;
+    int idx, written;
 
     setvbuf( stdout, NULL, _IOLBF, 0 );
 
-    card = card_open( 2 );
-    if (!card) return 2;
+    if (-1 == cards_find( cards, CARDS_MAX )) {
+        return 2;
+    }
 
-    written = card_meta( card, message, MESSAGE_MAX );
-    if (written < 0) return 3;
-    printf( "%s", message );
+    for (idx = 0; 0 != cards[idx]; idx++) {
+        if (!card_open( cards[idx] ))
+            return 3;
 
-    while (1) {
-        written = card_status( card, message, MESSAGE_MAX );
+        written = card_meta( cards[idx], message, MESSAGE_MAX );
         if (written < 0) return 3;
         printf( "%s", message );
+    }
+
+    while (1) {
+        for (idx = 0; 0 != cards[idx]; idx++) {
+            written = card_status( cards[idx], message, MESSAGE_MAX );
+            if (written < 0) return 3;
+            printf( "%s", message );
+        }
 
         sleep( 5 );
     }

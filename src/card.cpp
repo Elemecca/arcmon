@@ -5,6 +5,8 @@
 
 extern "C" {
     #include <time.h>
+    #include <errno.h>
+    #include <string.h>
 
     #include "common.h"
     #include "card.h"
@@ -28,13 +30,18 @@ private:
     CArclib card;
     sSYSTEM_INFO sysinfo;
     sDRV_MAP drives;
+    string scsi_id;
+    int sg_id;
 
 public:
-    int open (int index) {
+    Card (int sg_id, char *scsi_id)
+        : sg_id(sg_id), scsi_id(scsi_id) {}
+
+    int open() {
         int idx;
 
         iface = new LinuxPassIoctlInterface();
-        if (!iface->init( index )) {
+        if (!iface->init( sg_id )) {
             errlog( "error initializing with /dev/sg2" );
             goto error;
         }
@@ -72,7 +79,7 @@ public:
         size_t total = 0;
         int idx;
 
-        written = snprintf( message, size, "meta card 0\n");
+        written = snprintf( message, size, "meta card %s\n", scsi_id.c_str() );
         if (written < 0 || written >= size) goto error;
         message += written;
         size  -= written;
@@ -153,7 +160,7 @@ public:
             goto error;
         }
 
-        written = snprintf( message, size, "status card 0\n");
+        written = snprintf( message, size, "status card %s\n", scsi_id.c_str() );
         if (written < 0 || written >= size) goto error;
         message += written;
         size  -= written;
@@ -220,16 +227,9 @@ public:
 };
 
 
-card_t card_open (int index) {
-    Card *self = new Card();
-
-    if (!self->open( index )) {
-        errlog( "error opening device /dev/sg%d", index );
-        delete self;
-        return (card_t) NULL;
-    }
-
-    return static_cast<card_t>(self);
+int card_open (card_t card) {
+    Card *self = static_cast<Card*>(card);
+    return self->open();
 }
 
 int card_meta (card_t card, char message[], size_t size) {
@@ -245,4 +245,82 @@ int card_status (card_t card, char message[], size_t size) {
 void card_free (card_t card) {
     Card *self = static_cast<Card*>(card);
     delete self;
+}
+
+
+int cards_find (card_t cards[], size_t max) {
+    FILE *devices, *device_strs;
+    int sg_idx, card_idx, host, chan, id, lun, type;
+    char strs[32], dev_file[32], scsi_id[32];
+    int count;
+    char *status;
+    Card *card;
+
+    devices = fopen( "/proc/scsi/sg/devices", "r" );
+    if (!devices) {
+        errlog( "unable to open /proc/scsi/sg/devices: %s", strerror( errno ) );
+        goto error;
+    }
+
+    device_strs = fopen( "/proc/scsi/sg/device_strs", "r" );
+    if (!device_strs) {
+        errlog( "unable to open /proc/scsi/sg/device_strs: %s", strerror( errno ) );
+        goto error;
+    }
+
+    card_idx = 0;
+    for (sg_idx = 0;; sg_idx++) {
+        count = fscanf( devices,
+                "%d %d %d %d %d %*d %*d %*d %*d\n",
+                &host, &chan, &id, &lun, &type
+            );
+        if (EOF == count) break;
+        else if (5 != count) {
+            if (0 != errno) {
+                errlog( "error reading device list: %s", strerror( errno ) );
+            } else {
+                errlog( "unexpected input or EOF in /proc/scsi/sg/devices" );
+            }
+            goto error;
+        }
+
+        status = fgets( strs, 32, device_strs );
+        if (!status) {
+            if (feof( device_strs )) {
+                errlog( "unexpected EOF reading /proc/scsi/sg/device_strs" );
+            } else {
+                errlog( "error reading /proc/scsi/sg/device_strs: %s", strerror( errno ) );
+            }
+            goto error;
+        }
+
+        // don't consider empty device slots
+        if (-1 == host)
+            continue;
+
+        // only match type 3 (CPU) devices
+        if (3 != type)
+            continue;
+
+        // match the vendor and model strings
+        // there don't appear to be numeric counterparts
+        if (0 != strncmp( "Areca   \tRAID controller \t", strs, 26 ))
+            continue;
+
+        snprintf( scsi_id,  32, "%d:%d:%d:%d", host, chan, id, lun );
+
+        card = new Card( sg_idx, scsi_id );
+        cards[ card_idx++ ] = static_cast<card_t>( card );
+    }
+
+    fclose( devices );
+    fclose( device_strs );
+    return 0;
+
+error:
+    if (devices)
+        fclose( devices );
+    if (device_strs)
+        fclose( device_strs );
+    return -1;
 }
